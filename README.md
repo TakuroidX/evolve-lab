@@ -1,12 +1,22 @@
 # evolve-lab
 
-**「変異 × 信頼できる淘汰 × 遺伝」を、勾配が本物のドメインで動かす最小 POC。**
+**「変異 × 信頼できる淘汰 × 遺伝」を、勾配が本物のドメインで動かす。**
 
 純 Python・依存ゼロ・決定論 (seed 固定)。BTC bot リポジトリとは無関係の独立プロジェクト。
 
+2部構成:
+- **`evolve_lab.py`** — 最小 POC: 信頼淘汰は汎化・ナイーブ淘汰は裾で破滅、を対比実証 (下記)。
+- **`selection_engine.py`** — そこから抽出した **ドメイン非依存の「信頼できる淘汰エンジン」** (一つのオブジェクト)。
+  BTC bot の fitness harness + 本 POC の核を統合。variation×淘汰(汎用3ゲート: bootstrap/OOS/regime)×遺伝 を、
+  fitness とデータを plug すればどのドメインでも回せる形に。設計: `DESIGN.md`。
+
 ```bash
-python3 evolve_lab.py            # デモ (seed 1-6 を集計)
-python3 -m pytest -q             # 回帰ガード (6 件)
+python3 evolve_lab.py                       # POC デモ (seed 1-6 を集計)
+python3 -m pytest -q                         # 回帰ガード (evolve_lab 6 + selection_engine 7 = 13 件)
+python3 -c "import evolve_lab as el, selection_engine as se, domains; \
+  print(el.mse(se.evolve(domains.symbolic_regression(), [0.0]*6, 300, 1, \
+  accept_gates=[lambda d,c,i: se.gate_bootstrap(d,c,i,reps=400)])['incumbent'], \
+  el.make_dataset(400,1.0,10000)))"          # エンジンが勾配ドメインで汎化 → test_mse≈1.7 (既約1.0)
 ```
 
 ---
