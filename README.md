@@ -1,91 +1,140 @@
 # evolve-lab
 
-**「変異 × 信頼できる淘汰 × 遺伝」を、勾配が本物のドメインで動かす。**
+**A minimal, deterministic demonstration that the bottleneck in a self-improving loop is
+*trustworthy selection*, not mutation — and that the same selection discipline that catches a
+self-improving loop fooling itself can be made domain-agnostic and reused.**
 
-純 Python・依存ゼロ・決定論 (seed 固定)。BTC bot リポジトリとは無関係の独立プロジェクト。
-
-2部構成:
-- **`evolve_lab.py`** — 最小 POC: 信頼淘汰は汎化・ナイーブ淘汰は裾で破滅、を対比実証 (下記)。
-- **`selection_engine.py`** — そこから抽出した **ドメイン非依存の「信頼できる淘汰エンジン」** (一つのオブジェクト)。
-  BTC bot の fitness harness + 本 POC の核を統合。variation×淘汰(汎用3ゲート: bootstrap/OOS/regime)×遺伝 を、
-  fitness とデータを plug すればどのドメインでも回せる形に。設計: `DESIGN.md`。
+Pure Python, zero dependencies, fully deterministic (fixed seeds). Independent of the trading
+bot it was distilled from. For the longer narrative, see [`STORY.md`](STORY.md). 日本語は [`README.ja.md`](README.ja.md)。
 
 ```bash
-python3 evolve_lab.py                       # POC デモ (seed 1-6 を集計)
-python3 -m pytest -q                         # 回帰ガード (evolve_lab 6 + selection_engine 7 = 13 件)
-python3 -c "import evolve_lab as el, selection_engine as se, domains; \
-  print(el.mse(se.evolve(domains.symbolic_regression(), [0.0]*6, 300, 1, \
-  accept_gates=[lambda d,c,i: se.gate_bootstrap(d,c,i,reps=400)])['incumbent'], \
-  el.make_dataset(400,1.0,10000)))"          # エンジンが勾配ドメインで汎化 → test_mse≈1.7 (既約1.0)
+python3 evolve_lab.py     # POC: contrast trustworthy vs naive selection across seeds
+python3 -m pytest -q      # regression guards (evolve_lab 6 + selection_engine 7 = 13 tests)
 ```
 
 ---
 
-## なぜ作ったか
+## TL;DR
 
-BTC trading bot を 1 年半育てる中で、自動最適化ループ (proposer) を**意図的に停止**した。
-理由は「市場には信頼できる勾配 (エッジ) がほぼ無く、平坦な地形で変異率を上げると過学習ドリフト
-にしかならない」から。── *変異の前に、信頼できる淘汰を*。
+Over ~1.5 years I built a self-improving algorithmic-trading bot. It never found a durable edge.
+The honest, hard-won lesson was **not** "the model was too weak" — it was that **a self-improvement
+loop's hardest problem is selecting real improvements from noise without deceiving itself**, and that
+on a near-flat / non-stationary / censored fitness landscape, *more mutation just overfits faster*.
 
-ただこれだと疑問が残る: **方法 (変異×淘汰×遺伝) が悪いのか、ドメイン (市場) が悪いのか?**
+This repo isolates that lesson in two pieces:
 
-この POC は後者だと示す。**勾配が在るドメインなら、同じループ + 同じ淘汰器の思想は実際に登る。**
-そして「train だけ見るナイーブ淘汰」(= bot で 1 年半繰り返した "損失→フィルター追加→短期改善→
-別の問題" ループの正体) は、**裾で破滅的に過学習する**ことを対比で見せる。
+1. **`evolve_lab.py`** — a symbolic-regression POC where the hidden signal is real (a true gradient
+   exists). Run the *same* evolutionary loop with two selection rules and watch them diverge:
+   - **Trustworthy selection** (accept only if the improvement is statistically real on held-out data)
+     → generalizes, bounded near the irreducible error, **zero blow-ups**.
+   - **Naive selection** (accept if training error drops — the "loss → tweak → looks better → new problem"
+     loop) → **catastrophically overfits on some seeds (8–15× worse), unpredictably**.
 
-## 何をしているか
+2. **`selection_engine.py`** — the discipline extracted into one **domain-agnostic object**:
+   variation × selection (a pass/fail scorecard of generic gates) × inheritance. Plug in a fitness
+   function and data and it runs on any domain. The trading bot becomes just one (edgeless) domain it
+   can evaluate; symbolic regression is the domain where it visibly climbs.
 
-- **ドメイン**: 記号回帰。隠れた真の関数 `g(x) = 0.5x² − 2x + 1` (= 本物の勾配/信号) を、
-  ノイズ付きの少数データから多項式係数 (次数 9) を進化させて近似する。
-  高容量モデル × 少標本 = train のノイズに過学習できる = **市場の罠の縮図**。
-- **変異**: 係数を 1 つガウス摂動する。
-- **遺伝**: 採用された候補が次世代の親 (incumbent) になる。
-- **淘汰 (2 種を対比)**:
-  - **信頼淘汰 (harness)**: 改善が **held-out (val) 上で統計的に本物か** を bootstrap CI 下限>0 で判定。
-    train でいくら良くても val で有意改善しなければ却下。= bot の `tools/exit_replay/fitness.py`
-    (bootstrap ノイズフロア + OOS holdout) の思想を一般化したもの。
-  - **ナイーブ淘汰 (naive)**: train が改善すれば即採用。OOS を見ない。= 1y3m ループ型。
-- **test (400 点・完全未使用)** は最終報告にのみ使い、選別には一切触らせない。
+## The question it answers
 
-## 結果 (seed 1-6, 決定論的に再現)
+When a self-improving system fails to improve, there are two suspects: **the method**
+(variation × selection × inheritance) or **the domain** (is there a real gradient to climb?).
+For the trading bot, the method looked plausible but the result was null — so which was it?
+
+This POC isolates the variable. On a domain where a gradient provably exists, the same loop with
+trustworthy selection **does** climb. So the bot's failure points to the *domain* — no exploitable
+gradient in the inputs we could access — rather than the method. (Honest caveat: this shows the method
+*works where signal exists*; it cannot prove that better data or a better implementation would never
+have found an edge.) The corollary is the warning: with naive,
+train-only selection, the loop doesn't just fail to climb — it **drifts into overfitting**, exactly
+the "1.5-year loop" of loss → add a filter → short-term improvement → a new problem → repeat.
+
+## Results (seeds 1–6, deterministic)
 
 ```
-既約 test_mse ≈ 1.0  (ノイズ分散。これ未満は原理上不可能)
+irreducible test MSE ≈ 1.0  (the noise variance; nothing can beat this)
 
-  seed   信頼淘汰    ナイーブ
-   1       1.35       8.98   ← ナイーブ破滅
-   2       1.92       1.49
-   3       1.59      15.46   ← ナイーブ破滅
-   4       3.95       2.84
-   5       2.75       1.93
-   6       2.56       6.59   ← ナイーブ破滅
+  seed   trustworthy   naive
+   1        1.35        8.98   ← naive blow-up
+   2        1.92        1.49
+   3        1.59       15.46   ← naive blow-up
+   4        3.95        2.84
+   5        2.75        1.93
+   6        2.56        6.59   ← naive blow-up
 
-信頼淘汰  : 中央 2.24 / 最悪  3.95 / 破滅 0 件  → 既約近くに有界 = 騙されず汎化
-ナイーブ淘汰: 中央 4.72 / 最悪 15.46 / 破滅 3 件  → seed 次第で破滅的過学習
+trustworthy : median 2.24 / worst  3.95 / blow-ups 0   → bounded near irreducible, generalizes
+naive       : median 4.72 / worst 15.46 / blow-ups 3   → catastrophic overfit on some seeds
 ```
 
-**核心は平均でなく裾**: 平均ではそこまで差が無くても、ナイーブ淘汰は **seed 次第で 8〜15 倍まで
-大火傷する (予測不能)**。信頼淘汰は下振れを断ち、test 誤差を既約近くに有界化する。
-これは bot の 1y3m ループが「毎回ではなく、時々・予測不能に破綻した」構造そのものの縮図。
+**The point is the tail, not the mean.** On average the two are not far apart; the difference is that
+naive selection **blows up 8–15× on a fraction of seeds, unpredictably**, while trustworthy selection
+caps the downside. This mirrors how the bot's loop failed: not every time, but occasionally and
+without warning.
 
-> 正直な注記: これは「harness が常にナイーブに勝つ」話では**ない** (seed 2/5 はナイーブも汎化した)。
-> 主張は「harness は**最悪ケースを断つ**(破滅 0)、ナイーブは**裾リスクを抱える**(破滅 3/6)」。
-> 誇張しないことがこの研究の唯一の差別化なので、結果も誇張しない。
+> **Honest note:** this is *not* "trustworthy selection always wins" — on seeds 2 and 5 naive
+> generalizes fine. The claim is narrow and exact: **trustworthy selection removes the catastrophic
+> tail (0 blow-ups); naive selection carries it (3/6).** Not overstating the result is the entire point.
 
-## bot との対応関係
+## The selection engine
 
-| この POC | BTC bot |
+`selection_engine.py` generalizes the bot's `fitness.py` harness into a reusable object. A *domain*
+is just a dict: `variation`, `evaluate`, `data`, and optional `ordered_key` (for time-series OOS) /
+`slice_key` (for regime robustness). Three generic, self-deception-resistant gates:
+
+- **`gate_bootstrap`** — the per-sample improvement's 95% bootstrap CI must exclude 0 (above the noise floor).
+- **`gate_oos`** — time-series k-fold: the improvement must hold its sign across every time block (no period-overfit).
+- **`gate_regime`** — the improvement must not flip sign across regime slices (`"UNKNOWN"` slices are excluded, not silently bucketed).
+
+`select()` returns a **scorecard** (PASS / HOLD / FAIL) — it does not rank candidates (ranking invites
+the winner's curse). `evolve()` runs the loop with a configurable acceptance gate. Adding a new domain
+(`domains.py`) is one function; that is what "one engine" means.
+
+```bash
+python3 -c "import evolve_lab as el, selection_engine as se, domains; \
+  print(el.mse(se.evolve(domains.symbolic_regression(), [0.0]*6, 300, 1, \
+  accept_gates=[lambda d,c,i: se.gate_bootstrap(d,c,i,reps=400)])['incumbent'], \
+  el.make_dataset(400,1.0,10000)))"   # engine generalizes on a gradient domain → test_mse ≈ 1.7
+```
+
+## Honest positioning (what this is, and is **not**)
+
+None of the individual techniques here are novel. They are well-established:
+
+- **Backtest-overfitting statistics** — the Deflated Sharpe Ratio, Probability of Backtest Overfitting,
+  and Combinatorial Purged Cross-Validation (Bailey & López de Prado) are the rigorous, superior forms
+  of the bootstrap / OOS / contamination gates used here.
+- **Self-improving agents** — the [Darwin Gödel Machine](https://arxiv.org/abs/2505.22954) (Sakana/UBC),
+  [AlphaEvolve](https://deepmind.google/blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/) (DeepMind),
+  and the framing that a self-improvement loop is a multiple-testing procedure that can deceive itself.
+- **LLM-driven evolution on trading specifically** —
+  [MadEvolve](https://arxiv.org/abs/2605.23007) (Kvasiuk et al., May 2026) runs an LLM evolutionary loop
+  on BTC OHLCV with chronological train/val/test and explicit *p-hacking* analysis — strikingly close in
+  *approach*. The conclusions differ: MadEvolve reports positive results on its setup, whereas this
+  project's bot found no durable edge under its constraints. I found the techniques independently across
+  the preceding work and claim no priority.
+
+So this is **not a novel method**. It is (a) a small **engineering integration** — a pre-registered,
+multi-gate pass/fail scorecard wired *inside* a running loop, with an adversarial critic step — and
+(b) an **honestly reported negative result**, arrived at solo without moving the goalposts. If there is
+any sliver not obviously covered in the above, it is treating *censoring asymmetry* (an exit replay is
+right-censored at the realized close, so only tightening is observable) as an explicit selection veto —
+and even that is offered tentatively, pending a direct read of concurrent work.
+
+The value here is not novelty. It is a worked, reproducible example of a self-improvement loop that
+**refuses to fool itself** — under exactly the conditions (noise, non-stationarity, censoring) where
+documented systems have been shown to game their own evaluation.
+
+## Files
+
+| file | what |
 |---|---|
-| 隠れた真の関数 `g(x)` | 市場の (ほぼ無い) エッジ |
-| 多項式係数の進化 | 戦略パラメータ/フィルターの進化 (proposer) |
-| ナイーブ淘汰の破滅 | 「損失→フィルター追加→短期改善→別の問題」ループ |
-| 信頼淘汰 (val bootstrap) | `fitness.py` (contamination / regime / bootstrap / censoring / OOS) |
-| test を選別に触らせない | クリーン期間のみ評価・基準を後から動かさない規律 |
+| `evolve_lab.py` | true signal, data, mutation, both selection rules, evolution loop, `run_suite` |
+| `selection_engine.py` | domain-agnostic gates + `select()` scorecard + `evolve()` loop |
+| `domains.py` | domain adapters (symbolic regression; add one function per new domain) |
+| `test_*.py` | 13 deterministic regression guards |
+| `DESIGN.md` | architecture + roadmap |
+| `STORY.md` | the narrative: the 1.5-year loop, the null result, and what survived |
 
-**結論**: bot が進化しなかったのは "方法" でなく "市場に勾配が無い" せい。
-勾配が在るドメインに同じ淘汰の規律を載せれば、ループは実際に登る ── かつ騙されずに。
+## License
 
-## ファイル
-
-- `evolve_lab.py` — 真の信号 / データ生成 / 変異 / 2 種の淘汰 / 進化ループ / 集計 (`run_suite`)
-- `test_evolve_lab.py` — 回帰ガード 6 件 (有界化 / 裾リスク / 中央値 / 過学習 seed / 却下 / 採用)
+MIT (see `LICENSE`).
