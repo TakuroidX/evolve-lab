@@ -104,6 +104,47 @@ def gate_regime(domain, candidate, incumbent, min_n: int = 20):
     return GateResult("regime", "fail", "slice 間で符号反転 (この相場だけの改善=過学習疑い)", nums)
 
 
+def gate_censoring(domain, candidate, incumbent, min_observed: int = 10):
+    """**非対称 censoring veto** の汎用化 (BTC bot §I/Lesson-5)。打ち切り「率」で殺すのではなく
+    (それは方向で非対称な事実を無視し tighten を誤殺する)、**観測可能部 (右側打ち切りされていない
+    sample) だけで改善が保たれるか**を見る。`censored_key(candidate, sample)->bool` を持つドメインのみ。
+
+    - censored_key 無し → insufficient (この軸を持たないドメインを巻き込まない)
+    - 観測可能 sample < min_observed → insufficient (ほぼ観測不能=判定保留・ship しない)
+    - 全体は改善(+)なのに観測可能部で消失/逆転(≤0) → fail (改善は打ち切り由来=信用しない)
+    - それ以外 → pass
+
+    効果は自然に非対称になる: tighten(早く exit)は観測窓内なので高打ち切りでも観測可能部で改善が
+    残れば pass。loosen(実 close を超えて伸ばす)は観測不能が多く insufficient/fail に倒れる。
+    DEFAULT_GATES には入れない (censoring 軸のあるドメインが明示的に足す)。"""
+    key = domain.get("censored_key")
+    if key is None:
+        return GateResult("censoring", "insufficient", "censored_key 未定義 (打ち切り軸なし)", {})
+    data = domain["data"]
+    ev = domain["evaluate"]
+    n = len(data)
+    if n == 0:
+        return GateResult("censoring", "insufficient", "data ゼロ", {"n": 0})
+    flags = [bool(key(candidate, s)) for s in data]
+    cens = sum(flags)
+    rate = cens / n
+    obs = [ev(candidate, s) - ev(incumbent, s) for s, c in zip(data, flags) if not c]
+    n_obs = len(obs)
+    mean_all = sum(ev(candidate, s) - ev(incumbent, s) for s in data) / n
+    nums = {"n": n, "censored": cens, "rate": round(rate, 4), "n_observed": n_obs,
+            "mean_all": round(mean_all, 5),
+            "mean_observed": round(sum(obs) / n_obs, 5) if n_obs else None}
+    if n_obs < min_observed:
+        return GateResult("censoring", "insufficient",
+                          f"観測可能 {n_obs}<{min_observed} (打ち切り {rate:.0%}=ほぼ観測不能・判定保留)", nums)
+    mean_obs = sum(obs) / n_obs
+    if mean_all > 0 and mean_obs <= 0:
+        return GateResult("censoring", "fail",
+                          f"改善が観測可能部で消失 (obsΔ={mean_obs:.4f}≤0 < allΔ={mean_all:.4f}) = 打ち切り由来", nums)
+    return GateResult("censoring", "pass",
+                      f"観測可能部でも改善維持 (obsΔ={mean_obs:.4f} / 打ち切り {rate:.0%})", nums)
+
+
 DEFAULT_GATES = [gate_bootstrap, gate_oos, gate_regime]
 
 

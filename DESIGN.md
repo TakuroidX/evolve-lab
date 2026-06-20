@@ -47,7 +47,9 @@ domains.py
 4. ✅ **ab_select ドメイン adapter** (2026-06-21, A/B 選別の規律: 決定論・select 専用・敵対レビュー済)
 5. ✅ **btc_exit ドメイン adapter** (2026-06-21, replay_exit/load_paths 忠実移植 + 合成fixture +
    censoring veto 実演。実 175-path で bot fitness 判定と一致・敵対レビュー済) ← 生まれ故郷へエンジンを還す
-6. ☐ censoring を汎用ゲート化 (今は btc_exit の surface/veto。selection_engine 本体へ昇格) / payoff比ゲート
+6. ✅ **censoring を汎用ゲート化** (2026-06-21, `gate_censoring` を selection_engine 本体へ。打ち切り「率」でなく
+   **観測可能部で改善が残るか**で判定=方向非対称が自然に出る・tighten 誤殺なし。trap で PASS→HOLD 降格を実証)
+   / ☐ payoff比ゲートの汎用化 (まだ btc/bot 固有)
 
 ## Domain 2: prompt_opt 設計 (2026-06-20, interview-build)
 

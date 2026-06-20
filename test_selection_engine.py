@@ -43,6 +43,35 @@ def test_select_full_scorecard_pass():
     assert v.overall == "PASS"
 
 
+def test_censoring_insufficient_without_key():
+    # censored_key を持たないドメイン (記号回帰) では gate_censoring は insufficient (巻き込まない)
+    dom = domains.symbolic_regression(seed=1)
+    assert se.gate_censoring(dom, [1.0, -2.0, 0.5, 0.0, 0.0, 0.0], [0.0] * 6).status == "insufficient"
+
+
+def test_censoring_insufficient_when_mostly_unobservable():
+    # 18/20 が打ち切り → 観測可能 2 < min_observed → insufficient (判定保留=ship しない)
+    dom = {"data": list(range(20)), "evaluate": lambda c, s: 1.0 if c == "B" else 0.0,
+           "censored_key": lambda c, s: s < 18}
+    assert se.gate_censoring(dom, "B", "A", min_observed=10).status == "insufficient"
+
+
+def test_censoring_fail_when_improvement_is_censoring_driven():
+    # 打ち切り部では candidate +1 だが観測可能部では -0.5 → 全体+ でも観測可能部で消失 → fail
+    dom = {"data": list(range(20)),
+           "evaluate": lambda c, s: (1.0 if s < 10 else -0.5) if c == "B" else 0.0,
+           "censored_key": lambda c, s: s < 10}
+    r = se.gate_censoring(dom, "B", "A", min_observed=10)
+    assert r.status == "fail" and r.numbers["mean_all"] > 0 and r.numbers["mean_observed"] <= 0
+
+
+def test_censoring_pass_when_improvement_holds_observed():
+    # 改善が観測可能部でも残る (どこでも +0.5・打ち切り 20%) → pass
+    dom = {"data": list(range(20)), "evaluate": lambda c, s: 0.5 if c == "B" else 0.0,
+           "censored_key": lambda c, s: s < 4}
+    assert se.gate_censoring(dom, "B", "A", min_observed=10).status == "pass"
+
+
 def test_engine_evolves_and_generalizes():
     # 同じエンジンが勾配ドメインで [0]*6 から登り、未使用 test で汎化する (= evolve-lab 結果の再現)
     dom = domains.symbolic_regression(seed=1)

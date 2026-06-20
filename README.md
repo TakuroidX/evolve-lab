@@ -9,7 +9,7 @@ bot it was distilled from. For the longer narrative, see [`STORY.md`](STORY.md).
 
 ```bash
 python3 evolve_lab.py     # POC: contrast trustworthy vs naive selection across seeds
-python3 -m pytest -q      # regression guards (evolve_lab 6 + selection_engine 7 + prompt_opt 11 + ab_select 9 + btc_exit 15 = 48 tests)
+python3 -m pytest -q      # regression guards (evolve_lab 6 + selection_engine 11 + prompt_opt 11 + ab_select 9 + btc_exit 16 = 53 tests)
 ```
 
 ---
@@ -84,6 +84,7 @@ is just a dict: `variation`, `evaluate`, `data`, and optional `ordered_key` (for
 - **`gate_bootstrap`** — the per-sample improvement's 95% bootstrap CI must exclude 0 (above the noise floor).
 - **`gate_oos`** — time-series k-fold: the improvement must hold its sign across every time block (no period-overfit).
 - **`gate_regime`** — the improvement must not flip sign across regime slices (`"UNKNOWN"` slices are excluded, not silently bucketed).
+- **`gate_censoring`** (opt-in) — for domains with right-censoring, the improvement must hold on the *observed* (non-censored) subset; a gain that exists only on censored samples is rejected. Kept out of the defaults so it only bites domains that declare a `censored_key` (see the bot-exit section).
 
 `select()` returns a **scorecard** (PASS / HOLD / FAIL) — it does not rank candidates (ranking invites
 the winner's curse). `evolve()` runs the loop with a configurable acceptance gate. Adding a new domain
@@ -179,11 +180,16 @@ Three honest qualifications, stated up front:
    rejected as premature (the gain was concentrated in a two-day trending window; the OOS split was
    noisy). The engine and the bot agree *because they run the same discipline* — including the part that
    refuses a PASS.
-3. **Censoring does real work, not just decoration.** Price paths are right-censored at the realized
-   close, so *loosening* an exit is structurally unobservable (you can't see past the close). On a
-   constructed trap (`make_censoring_trap_paths`) a looser exit **passes all three gates** yet is
-   **100 % censored** — so the censoring veto overrides the gate-PASS. This asymmetry (only tightening is
-   measurable) is the single most defensible idea in the repo, and it is *demonstrated*, not asserted.
+3. **Censoring does real work, not just decoration** — and it is a *generic gate*, not a hand-rolled
+   veto. Price paths are right-censored at the realized close, so *loosening* an exit is structurally
+   unobservable (you can't see past the close). `gate_censoring` doesn't crudely reject on a censored
+   *rate* (that would wrongly kill a tightening that simply rarely binds); it asks whether the
+   improvement **holds on the observed, non-censored subset**. On a constructed trap
+   (`make_censoring_trap_paths`) a looser exit **passes bootstrap, OOS, and regime** yet has **zero
+   observable samples** — so `gate_censoring` returns *insufficient* and downgrades the would-be PASS to
+   **HOLD (don't ship)**, while a tightening candidate at 66 % censored still **passes** (its gain is
+   observable). The asymmetry falls out naturally. This is the single most defensible idea in the repo,
+   and it is *demonstrated*, not asserted.
 
 ```bash
 python3 demo_btc_exit.py            # deterministic synthetic fixture (free) + the censoring-veto demo
@@ -236,7 +242,7 @@ non-stationarity, censoring) where documented systems have been shown to game th
 | `demo_ab_select.py` | deterministic, free contrast demo (naive mean-compare vs trustworthy scorecard) |
 | `btc_exit.py` | bot exit-replay domain: faithfully-ported `replay_exit`/`load_paths`, synthetic fixture, censoring veto |
 | `demo_btc_exit.py` | judges the bot's real exits read-only (`--paths`) or a synthetic fixture; censoring-veto demo |
-| `test_*.py` | 48 deterministic regression guards (offline) |
+| `test_*.py` | 53 deterministic regression guards (offline) |
 | `DESIGN.md` | architecture + roadmap |
 | `STORY.md` | the narrative: the 1.5-year loop, the null result, and what survived |
 

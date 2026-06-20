@@ -14,12 +14,13 @@ import btc_exit as bx
 import domains
 import selection_engine as se
 
+# 4ゲート: bootstrap/oos/regime + censoring (step6 で汎用ゲート化した非対称 veto)
 GATES = [lambda d, c, i: se.gate_bootstrap(d, c, i, reps=800),
          lambda d, c, i: se.gate_oos(d, c, i, min_n=20),
-         lambda d, c, i: se.gate_regime(d, c, i, min_n=20)]
+         lambda d, c, i: se.gate_regime(d, c, i, min_n=20),
+         lambda d, c, i: se.gate_censoring(d, c, i)]
 DESC = {"tight_ts": "早利確 (TS を狭く)", "tight_sl": "早損切り (SL 0.6→0.4)",
         "loose_ts": "利伸ばし (TS 幅↑ = 緩和方向)"}
-LOOSEN = {"loose_ts"}  # 緩和方向 = censoring veto 対象
 
 
 def main() -> int:
@@ -39,33 +40,30 @@ def main() -> int:
     for p in dom["data"]:
         slices[dom["slice_key"](p)] = slices.get(dom["slice_key"](p), 0) + 1
     print(f"regime slices: {slices}\n")
-    print(f"{'候補':22s} {'判定':6s} {'boot':5s} {'oos':5s} {'reg':5s} {'censored':9s} 備考")
-    print("-" * 84)
+    print(f"{'候補':22s} {'判定':6s} {'boot':5s} {'oos':5s} {'reg':5s} {'cens':5s} (censored%)")
+    print("-" * 80)
     for key in ("tight_ts", "tight_sl", "loose_ts"):
         cand = bx.CANDIDATES[key]
         v = se.select(dom, cand, bx.INCUMBENT, gates=GATES)
         g = {r.name: r.status for r in v.gates}
         cr = bx.censored_rate(dom["data"], cand)
-        note = ""
-        if key in LOOSEN and cr > 30:
-            note = f"⚠ 緩和×censored {cr}% → 結論 veto (観測不能)"
         print(f"{DESC[key]:22s} {v.overall:6s} {g['bootstrap']:5s} {g['oos']:5s} "
-              f"{g['regime']:5s} {cr:7.1f}%  {note}")
-    print("-" * 84)
+              f"{g['regime']:5s} {g['censoring']:5s} ({cr:.1f}%)")
+    print("-" * 80)
     print("淘汰器は ranking せず 1候補ずつ判定 (Lesson-5)。PASS≠ship (Lesson-6: 最終は人/critic)。")
-    print("緩和方向は右側打ち切りで観測不能 → 汎用ゲートが pass でも censoring veto が優先 (bot §I)。")
+    print("censoring は 4本目の汎用ゲート (step6): 打ち切り「率」でなく**観測可能部で改善が残るか**を見る")
+    print("  = tighten(観測窓内)は高打ち切りでも残れば pass / loosen(close超え)は観測不能で降格 = 非対称。")
 
-    # censoring veto が「実仕事をする」実演: 3ゲートが PASS でも 100% censored なら veto が却下
+    # censoring ゲートが「実仕事をする」実演: 他3ゲートが PASS でも観測不能なら総合を降格させる
     trap = bx.make_censoring_trap_paths(n=90, seed=1)
     tdom = bx.build_btc_exit_domain(trap, regime_key=bx.trend_phase)
     tv = se.select(tdom, bx.CANDIDATES["loose_ts"], bx.INCUMBENT, gates=GATES)
     tg = {r.name: r.status for r in tv.gates}
-    tcr = bx.censored_rate(trap, bx.CANDIDATES["loose_ts"])
-    print(f"\n[censoring veto の実演 — 押し目→高値close の trap fixture, n={len(trap)}]")
-    print(f"  利伸ばし(loose): 3ゲート判定={tv.overall} (boot={tg['bootstrap']}/oos={tg['oos']}/reg={tg['regime']})"
-          f" だが censored={tcr}%")
-    print(f"  → 汎用ゲートは『本物の改善』に見せられる。**censoring veto が PASS を却下** "
-          f"(実 close から先は観測不能=緩和の真の効果は測れない)。これが gate 単体で不十分な理由。")
+    print(f"\n[censoring ゲートの実演 — 押し目→高値close の trap fixture, n={len(trap)}]")
+    print(f"  利伸ばし(loose): 総合={tv.overall} | boot={tg['bootstrap']} oos={tg['oos']} "
+          f"reg={tg['regime']} → **censoring={tg['censoring']}** (観測可能 sample ゼロ)")
+    print(f"  → bootstrap/oos/regime は『本物の改善』に騙される。だが loose は実 close から先が観測不能 →")
+    print(f"     **censoring ゲートが総合を PASS から降格 (=ship しない)**。これが汎用化した非対称 veto。")
     return 0
 
 

@@ -258,6 +258,8 @@ def build_btc_exit_domain(paths: list, regime_key=trend_phase) -> dict:
         "data": paths,
         "ordered_key": lambda p: p.trade_id,
         "slice_key": regime_key,
+        # 右側打ち切り軸: gate_censoring が緩和方向 veto を scorecard 内で効かせる (step6 で汎用ゲート化)
+        "censored_key": lambda params, p: replay_exit(p.mtm_series, params).censored,
     }
 
 

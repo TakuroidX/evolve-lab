@@ -74,18 +74,25 @@ def test_loosen_candidate_flagged_by_censoring():
     assert cr_loose > cr_tight      # tighten より緩和の方が観測不能
 
 
-def test_censoring_veto_overrides_gate_pass():
-    # 核心 (検収#1): 汎用3ゲートが loose を PASS させても、100% censored なら veto が PASS を却下すべき。
-    # = ゲート単体では不十分・censoring veto が実仕事をする実証 (bot §I/Lesson-5)。
+def test_censoring_gate_overrides_other_gate_pass():
+    # 核心 (検収#1 + step6): bootstrap/oos/regime が loose を「本物の改善」と PASS させても、
+    # loose は 100% 右側打ち切り=観測可能 sample ゼロ → censoring ゲートが insufficient を返し、
+    # 総合は PASS から HOLD に降格 (=ship しない)。非対称 veto を scorecard 内で表現 (bot §I/Lesson-5)。
     paths = bx.make_censoring_trap_paths(n=90, seed=1)
     dom = bx.build_btc_exit_domain(paths, regime_key=bx.trend_phase)
-    v = se.select(dom, bx.CANDIDATES["loose_ts"], bx.INCUMBENT, gates=GATES)
-    assert v.overall == "PASS"                              # 3ゲートは騙される (本物の改善に見える)
-    cr = bx.censored_rate(paths, bx.CANDIDATES["loose_ts"])
-    assert cr >= 90.0                                       # だが大半が観測不能
-    # 運用ルール: 緩和方向 × censored>30% → veto (gate PASS を上書き)
-    vetoed = cr > 30.0
-    assert vetoed                                           # → 結論は却下されるべき
+    gates4 = GATES + [lambda d, c, i: se.gate_censoring(d, c, i)]
+    v = se.select(dom, bx.CANDIDATES["loose_ts"], bx.INCUMBENT, gates=gates4)
+    g = {r.name: r.status for r in v.gates}
+    assert g["bootstrap"] == "pass" and g["oos"] == "pass" and g["regime"] == "pass"  # 他3は騙される
+    assert g["censoring"] == "insufficient"                 # loose は観測不能 (n_observed=0)
+    assert v.overall != "PASS"                              # → 降格 (HOLD): 観測できないものは ship しない
+
+
+def test_censoring_gate_passes_tighten_low_censored():
+    # tighten 候補は打ち切り低 → censoring ゲートは pass (緩和でないので veto しない)
+    dom = domains.btc_exit(n=120, seed=1, regime="trend")
+    r = se.gate_censoring(dom, bx.CANDIDATES["tight_sl"], bx.INCUMBENT)
+    assert r.status == "pass"
 
 
 def test_synthetic_side_decoupled_from_kind():
