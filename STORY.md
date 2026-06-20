@@ -87,8 +87,30 @@ with the goalposts nailed down in advance:
   MadEvolve reports a positive result on its setup; this bot found no durable edge under its
   constraints. I found the techniques independently across the preceding work and claim no priority.)
 
-Each of these is a "no." Together they are the honest, complete answer: **this bot has no edge, and
-this work is not novel.** The right thing to do with that answer is to report it straight.
+Each of these was a "no," reported straight even where it cost the bot's last plausible hope. The
+exit-side and new-input findings still stand. But the most important part came the next day — and it
+cut the *other* way.
+
+## 4.5 The discipline catching itself
+
+A routine audit of the system's own code found something that reopened the model question entirely:
+the live model had been fed **corrupted input the whole time**. A version-gate bug — the code asked
+`if model_version == "v3"` while the running model was `"v3_xgb"` — meant five of its forty features,
+**including its single most important one**, were never computed at inference and were silently passed
+in as constant out-of-distribution values. Roughly **17% of the model's decision weight was frozen at
+garbage**, on every prediction, for as long as that model had been live.
+
+This matters because the earlier "the model has no edge" conclusion had been measured on a *crippled*
+model. The same rigor that refused to let a false positive ship now refused to let a *false negative*
+stand: it would not accept a "no edge" verdict built on a bug. The fix was a one-line correctness
+change; the honest consequence is larger — **the model's edge verdict is withdrawn and is being
+re-measured on clean, post-fix data.** This does *not* mean an edge exists. Restoring the input only
+returns the model to what it was trained for; whether that beats real costs is the open question. It
+means the conclusion was not yet *earned*, so it is being earned again.
+
+I keep this in the story rather than quietly retaining the tidier "no edge" ending, because that choice
+*is* the thesis. A loop that refuses to deceive itself has to refuse to deceive itself about its own
+conclusions too — including a conclusion it had already written down.
 
 ## 5. What survived
 
@@ -96,20 +118,25 @@ Two things outlived the bot's null result.
 
 **A reusable selection engine.** The discipline, extracted into one domain-agnostic object
 (`selection_engine.py`): variation × a pass/fail gate of self-deception-resistant tests × inheritance.
-Point it at symbolic regression and it visibly climbs; point it at the trading bot and it honestly
-reports no edge. New domains are one function each.
+Point it at symbolic regression and it visibly climbs; point it at the trading bot and it reports
+honestly — including, this week, that an earlier no-edge verdict was itself built on a bug and is being
+redone (§4.5). New domains are one function each.
 
 **A worked example of a self-improving loop that doesn't deceive itself.** This is the part I'd stand
 behind. None of the statistics are new — the Deflated Sharpe Ratio and Combinatorial Purged
 Cross-Validation (Bailey & López de Prado) are the rigorous ancestors of these gates. The contribution,
 such as it is, is *integration and honesty*: a pre-registered multi-gate scorecard, an adversarial
-critic, and kill-criteria, operating inside a live loop, producing a clean negative result without
-moving a single goalpost — under exactly the noise/non-stationarity/censoring conditions where
-documented systems have gamed their own evaluation.
+critic, and kill-criteria, operating inside a live loop, producing negatives reported straight without
+moving a single goalpost — and, when a later audit showed one of those negatives rested on a bug,
+**withdrawing that conclusion just as straight** — under exactly the noise/non-stationarity/censoring
+conditions where documented systems have gamed their own evaluation.
 
-There is even a small, self-referential proof in here: when I asked whether this work was
-"cutting-edge," the same honest machinery returned *"no — others got there first."* The discipline
-refused to inflate its own résumé. That refusal is the result.
+There are two small, self-referential proofs in here. When I asked whether this work was
+"cutting-edge," the same honest machinery returned *"no — others got there first,"* and refused to
+inflate its own résumé. And when a conclusion it had already written down ("the model has no edge")
+turned out to rest on a bug, it withdrew that conclusion rather than keep the tidier story. The
+discipline pointed both at false hope and at its own comfortable verdict. That two-way refusal is the
+result.
 
 ## 6. Why it matters
 

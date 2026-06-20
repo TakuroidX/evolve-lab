@@ -115,14 +115,19 @@ None of the individual techniques here are novel. They are well-established:
 
 So this is **not a novel method**. It is (a) a small **engineering integration** — a pre-registered,
 multi-gate pass/fail scorecard wired *inside* a running loop, with an adversarial critic step — and
-(b) an **honestly reported negative result**, arrived at solo without moving the goalposts. If there is
-any sliver not obviously covered in the above, it is treating *censoring asymmetry* (an exit replay is
-right-censored at the realized close, so only tightening is observable) as an explicit selection veto —
-and even that is offered tentatively, pending a direct read of concurrent work.
+(b) **negatives reported straight, then re-examined just as straight**: a later audit found one of the
+"no edge" verdicts had been measured on a model fed corrupted input (a `== "v3"` version-gate bug
+froze ~17% of its features), so that verdict was **withdrawn and is being re-measured on clean data**
+(see `STORY.md` §4.5) — which does *not* imply an edge exists, only that the conclusion was not yet
+earned. If there is any sliver of method not obviously covered above, it is treating *censoring
+asymmetry* (an exit replay is right-censored at the realized close, so only tightening is observable)
+as an explicit selection veto — and even that is offered tentatively, pending a direct read of
+concurrent work.
 
 The value here is not novelty. It is a worked, reproducible example of a self-improvement loop that
-**refuses to fool itself** — under exactly the conditions (noise, non-stationarity, censoring) where
-documented systems have been shown to game their own evaluation.
+**refuses to fool itself in both directions** — rejecting false positives *and* withdrawing its own
+comfortable negative once it turns out to rest on a bug — under exactly the conditions (noise,
+non-stationarity, censoring) where documented systems have been shown to game their own evaluation.
 
 ## Files
 
