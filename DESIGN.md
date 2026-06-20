@@ -42,6 +42,38 @@ domains.py
 
 ## ロードマップ (再利用する道具 として)
 1. ✅ 汎用エンジン core + 汎用3ゲート + symbolic domain + tests (2026-06-19)
-2. ☐ btc_exit ドメイン adapter (bot の position_path を load → 既存 fitness.py を本エンジンに載せ替え検証)
-3. ☐ payoff比 / censoring ゲートを汎用化して plug (bot 固有から汎用へ)
-4. ☐ README 英語化 + 公開品質 (Sakana 札・公開判断は user のみ)
+2. ✅ README 英語化 + 公開品質 (2026-06-20, 公開判断は user のみ)
+3. ☐ **prompt_opt ドメイン adapter** (2026-06-20 着手, 下記) ← 第2の「本物の勾配」ドメイン
+4. ☐ ab_select ドメイン adapter (A/B 選別の規律: 決定論・既存3ゲートに 1:1)
+5. ☐ btc_exit ドメイン adapter (bot の position_path を load → 既存 fitness.py を本エンジンに載せ替え)
+6. ☐ payoff比 / censoring ゲートを汎用化して plug (bot 固有から汎用へ)
+
+## Domain 2: prompt_opt 設計 (2026-06-20, interview-build)
+
+**狙い**: 「同じ淘汰エンジンが、市場と違って**本物の勾配があるドメイン**でも登る」を実証する第2例。
+プロンプト最適化は (a) 勾配が実在 (b) 評価がノイジー (小eval/サンプリング揺れ) = ナイーブ選別なら
+「たまたま小evalで勝ったプロンプト」を出荷してしまう。淘汰器がそれを弾く様子を見せる。
+
+| 分岐 (interview 2026-06-20) | 決定 |
+|------|------|
+| 評価/変異の回し方 | **Anthropic API 主体** (最高忠実度・Sakana 直結。コスト/非決定論は下記ガードで封じる) |
+| 着手順 | **2 (prompt_opt) 先行 → 3 (ab_select)** |
+
+**設計原則 (純コアを汚さない)**:
+- エンジン本体 (`selection_engine.py`) と全テストは **純Python・依存ゼロ・決定論** を維持。
+- API を叩くのは **`anthropic_backend.py` 1ファイルだけに隔離** (stdlib `urllib` のみ・**追加依存ゼロ**)。
+  鍵は実行時に `ANTHROPIC_API_KEY` 環境変数から読む (リポジトリに鍵を置かない・bot の .env に依存しない)。
+- `model_fn(prompt, input) -> output` / `rewrite_fn(parent, rng) -> child` を **注入式**に。
+  実行=Anthropic backend / **テスト=決定論の fake** (API 不要のまま CI 可能・再現性確保)。
+- **コストガード**: 評価キャッシュ (同一 (prompt,input) は1回だけ) + max_calls 上限 + 安いモデル
+  (claude-haiku-4-5)。実 API デモは **user の明示 OK 後のみ** 実行 (推定コストを先に提示)。
+
+**ドメイン dict の対応**:
+- `variation(parent_prompt, rng)` = LLM がプロンプトを1点改変 (seed 付き directive)。
+- `evaluate(prompt, sample)` = prompt で sample.input を解かせ、**ground truth** と突合したスコア
+  (客観スコアラ。ノイズは小eval + サンプリング揺れ由来 = 自己欺瞞リスクが出る所)。
+- `data` = リポジトリ同梱の小 eval セット (input/label/category)。
+- `slice_key` = category (regime ゲート: 1カテゴリだけで勝つ過学習を弾く)。`ordered_key` = index。
+
+**正直な scope (誇張回避)**: これは「同じエンジンが勾配ドメインで汎化する」POC であって製品ではない。
+PASS≠ship (Lesson-6)。スコア改善≠実用 (本番タスクは別)。bot の no-edge とは独立 (こちらは勾配が在る)。
