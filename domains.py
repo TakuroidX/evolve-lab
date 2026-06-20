@@ -5,8 +5,15 @@
 """
 from __future__ import annotations
 
+import ab_select as ab
 import evolve_lab as el
 import prompt_opt as po
+
+
+def ab_select(scenario: str = "genuine", n: int = 120, seed: int = 1) -> dict:
+    """A/B 選別ドメイン (select 専用・決定論・API 不要)。scenario ∈ ab_select.SCENARIOS。
+    select(dom, "b", "a") で処理 B vs 対照 A を判定。ナイーブ比較は ab_select.naive_winner(dom)。"""
+    return ab.build_ab_domain(ab.make_ab_samples(scenario, n=n, seed=seed))
 
 
 def prompt_opt(model_fn=None, rewrite_fn=None, n: int = 24, seed: int = 1,

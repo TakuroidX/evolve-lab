@@ -9,7 +9,7 @@ bot it was distilled from. For the longer narrative, see [`STORY.md`](STORY.md).
 
 ```bash
 python3 evolve_lab.py     # POC: contrast trustworthy vs naive selection across seeds
-python3 -m pytest -q      # regression guards (evolve_lab 6 + selection_engine 7 + prompt_opt 11 = 24 tests)
+python3 -m pytest -q      # regression guards (evolve_lab 6 + selection_engine 7 + prompt_opt 11 + ab_select 9 = 33 tests)
 ```
 
 ---
@@ -125,6 +125,31 @@ discriminates on real-LLM output — it is *not* a tuned prompt optimizer. Promp
 itself a crowded, adjacent field (DSPy, GEPA, ShinkaEvolve); the only thing claimed here is the
 reusable *selection* discipline applied to it.
 
+## A third domain: trustworthy A/B selection
+
+`domains.ab_select` applies the *same* gates to A/B experiment analysis — no LLM, fully deterministic,
+free to run. A *sample* is one unit `{week, segment, a, b}` (control vs treatment; the synthetic data
+uses paired counterfactuals — real A/B is unpaired and would use the two-sample form of the *same*
+gate logic). `naive_winner()` ships B whenever `mean(b) > mean(a)` — what teams routinely do. Four
+planted scenarios, each a different way an A/B "win" can lie:
+
+```
+$ python3 demo_ab_select.py            # deterministic, no API, seed=1
+scenario        naive           engine  boot  oos   reg   caught by
+genuine         ship B (+5.14)   PASS   pass  pass  pass  — (true positive)
+peeking         ship B (+2.54)   FAIL   pass  fail  pass  oos    (sign flips across time blocks)
+concentrated    ship B (+2.15)   FAIL   pass  pass  fail  regime (win confined to one segment)
+noise           ship B (+0.69)   FAIL   fail  fail  fail  bootstrap (within the noise floor)
+```
+
+The two **structural** false positives are robust, not cherry-picked: across 20 seeds, naive ships
+`peeking` and `concentrated` **20/20** and the engine rejects them **20/20** — and crucially their
+aggregate mean *passes* the bootstrap gate (the win looks real) while the structured gate catches it.
+`noise` is honestly **probabilistic** — that is what noise *is*: naive ships it 16/20 seeds and the
+bootstrap floor rejects it 19/20, so this is **not** claimed as "always 4/4." The honest, robust claim
+is narrow and exact: **the two traps that fool aggregate statistics are caught every time, by the gate
+that matches the trap** — the same engine and the same `select()` scorecard as the other two domains.
+
 ## Honest positioning (what this is, and is **not**)
 
 None of the individual techniques here are novel. They are well-established:
@@ -164,11 +189,13 @@ non-stationarity, censoring) where documented systems have been shown to game th
 |---|---|
 | `evolve_lab.py` | true signal, data, mutation, both selection rules, evolution loop, `run_suite` |
 | `selection_engine.py` | domain-agnostic gates + `select()` scorecard + `evolve()` loop |
-| `domains.py` | domain adapters (symbolic regression + prompt optimization; one function per new domain) |
+| `domains.py` | domain adapters (symbolic regression + prompt optimization + A/B selection; one function each) |
 | `prompt_opt.py` | prompt-optimization domain: labeled task, scorer, deterministic fake model, cost-capped cache |
 | `anthropic_backend.py` | the only networked file: real LLM model/rewrite via `urllib`, key from env, zero deps |
 | `demo_prompt_opt.py` | runnable real-API demo (graceful no-cost skip when no key) |
-| `test_*.py` | 24 deterministic regression guards (offline) |
+| `ab_select.py` | A/B-selection domain: 4 planted scenarios + `naive_winner()` contrast (deterministic, no API) |
+| `demo_ab_select.py` | deterministic, free contrast demo (naive mean-compare vs trustworthy scorecard) |
+| `test_*.py` | 33 deterministic regression guards (offline) |
 | `DESIGN.md` | architecture + roadmap |
 | `STORY.md` | the narrative: the 1.5-year loop, the null result, and what survived |
 

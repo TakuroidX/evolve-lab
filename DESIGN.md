@@ -43,8 +43,8 @@ domains.py
 ## ロードマップ (再利用する道具 として)
 1. ✅ 汎用エンジン core + 汎用3ゲート + symbolic domain + tests (2026-06-19)
 2. ✅ README 英語化 + 公開品質 (2026-06-20, 公開判断は user のみ)
-3. ☐ **prompt_opt ドメイン adapter** (2026-06-20 着手, 下記) ← 第2の「本物の勾配」ドメイン
-4. ☐ ab_select ドメイン adapter (A/B 選別の規律: 決定論・既存3ゲートに 1:1)
+3. ✅ **prompt_opt ドメイン adapter** (2026-06-20, 実 API 実走済) ← 第2の「本物の勾配」ドメイン
+4. ✅ **ab_select ドメイン adapter** (2026-06-21, A/B 選別の規律: 決定論・select 専用・敵対レビュー済)
 5. ☐ btc_exit ドメイン adapter (bot の position_path を load → 既存 fitness.py を本エンジンに載せ替え)
 6. ☐ payoff比 / censoring ゲートを汎用化して plug (bot 固有から汎用へ)
 
