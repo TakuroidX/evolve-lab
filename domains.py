@@ -6,6 +6,18 @@
 from __future__ import annotations
 
 import evolve_lab as el
+import prompt_opt as po
+
+
+def prompt_opt(model_fn=None, rewrite_fn=None, n: int = 24, seed: int = 1,
+               max_calls: int = 100_000, max_rewrites: int = 100_000) -> dict:
+    """プロンプト最適化ドメイン (本物の勾配 + ノイジー評価)。引数なし = 決定論 fake (API 不要)。
+    実 API は anthropic_backend.make_model_fn()/make_rewrite_fn() を渡す (DESIGN.md Domain 2)。
+    ⚠️ accept gate に gate_bootstrap を使うなら n>=10 必須 (未満は insufficient で受理ゼロ=登れない)。"""
+    samples = po.make_prompt_samples(n=n, seed=seed)
+    mf = model_fn or po.make_fake_model(samples)
+    rf = rewrite_fn or po.make_fake_rewrite()
+    return po.build_prompt_domain(mf, rf, samples, max_calls=max_calls, max_rewrites=max_rewrites)
 
 
 def symbolic_regression(seed: int = 1, n_val: int = 60, noise: float = 1.0,
