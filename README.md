@@ -9,7 +9,7 @@ bot it was distilled from. For the longer narrative, see [`STORY.md`](STORY.md).
 
 ```bash
 python3 evolve_lab.py     # POC: contrast trustworthy vs naive selection across seeds
-python3 -m pytest -q      # regression guards (evolve_lab 6 + selection_engine 7 = 13 tests)
+python3 -m pytest -q      # regression guards (evolve_lab 6 + selection_engine 7 + prompt_opt 11 = 24 tests)
 ```
 
 ---
@@ -96,6 +96,35 @@ python3 -c "import evolve_lab as el, selection_engine as se, domains; \
   el.make_dataset(400,1.0,10000)))"   # engine generalizes on a gradient domain → test_mse ≈ 1.7
 ```
 
+## A second domain: prompt optimization on a real LLM
+
+`domains.prompt_opt` plugs a prompt-optimization task into the *same* engine — and unlike symbolic
+regression it can run against a real LLM. The only file that touches the network is
+`anthropic_backend.py` (stdlib `urllib`, key from env); tests use a deterministic fake, stay offline,
+and remain CI-safe. A prompt is a system instruction: `variation` asks the LLM to rewrite it,
+`evaluate` runs it on a labeled task and scores exact-match, `slice_key` is the task category.
+
+Run against Claude Haiku (`demo_prompt_opt.py`, ~92 API calls, cents):
+
+```
+start   prompt : "answer the question"                                     score 0.000
+evolved prompt : "answer the question with only the final value, no words" score 0.333  (1 accepted)
+scorecard: FAIL   bootstrap pass · oos pass · regime FAIL (gain held in only one task category)
+```
+
+Two honest readings, both intended:
+
+- The same engine **climbs on a real LLM** — Claude rewrote the prompt and the score rose from 0,
+  with the improvement passing the bootstrap noise-floor and the time-block OOS gate.
+- The engine then **refused to ship it**: `gate_regime` caught that the gain held in only one category
+  (sign flip across slices) → overall **FAIL**. A real, calibrated *no* on a real model — the same
+  "don't fool yourself" discipline, now exercised against an LLM rather than a synthetic gradient.
+
+The score is modest **by design**: this demonstrates that the engine runs and that selection
+discriminates on real-LLM output — it is *not* a tuned prompt optimizer. Prompt/agent optimization is
+itself a crowded, adjacent field (DSPy, GEPA, ShinkaEvolve); the only thing claimed here is the
+reusable *selection* discipline applied to it.
+
 ## Honest positioning (what this is, and is **not**)
 
 None of the individual techniques here are novel. They are well-established:
@@ -135,8 +164,11 @@ non-stationarity, censoring) where documented systems have been shown to game th
 |---|---|
 | `evolve_lab.py` | true signal, data, mutation, both selection rules, evolution loop, `run_suite` |
 | `selection_engine.py` | domain-agnostic gates + `select()` scorecard + `evolve()` loop |
-| `domains.py` | domain adapters (symbolic regression; add one function per new domain) |
-| `test_*.py` | 13 deterministic regression guards |
+| `domains.py` | domain adapters (symbolic regression + prompt optimization; one function per new domain) |
+| `prompt_opt.py` | prompt-optimization domain: labeled task, scorer, deterministic fake model, cost-capped cache |
+| `anthropic_backend.py` | the only networked file: real LLM model/rewrite via `urllib`, key from env, zero deps |
+| `demo_prompt_opt.py` | runnable real-API demo (graceful no-cost skip when no key) |
+| `test_*.py` | 24 deterministic regression guards (offline) |
 | `DESIGN.md` | architecture + roadmap |
 | `STORY.md` | the narrative: the 1.5-year loop, the null result, and what survived |
 
