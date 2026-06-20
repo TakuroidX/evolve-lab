@@ -45,8 +45,9 @@ domains.py
 2. ✅ README 英語化 + 公開品質 (2026-06-20, 公開判断は user のみ)
 3. ✅ **prompt_opt ドメイン adapter** (2026-06-20, 実 API 実走済) ← 第2の「本物の勾配」ドメイン
 4. ✅ **ab_select ドメイン adapter** (2026-06-21, A/B 選別の規律: 決定論・select 専用・敵対レビュー済)
-5. ☐ btc_exit ドメイン adapter (bot の position_path を load → 既存 fitness.py を本エンジンに載せ替え)
-6. ☐ payoff比 / censoring ゲートを汎用化して plug (bot 固有から汎用へ)
+5. ✅ **btc_exit ドメイン adapter** (2026-06-21, replay_exit/load_paths 忠実移植 + 合成fixture +
+   censoring veto 実演。実 175-path で bot fitness 判定と一致・敵対レビュー済) ← 生まれ故郷へエンジンを還す
+6. ☐ censoring を汎用ゲート化 (今は btc_exit の surface/veto。selection_engine 本体へ昇格) / payoff比ゲート
 
 ## Domain 2: prompt_opt 設計 (2026-06-20, interview-build)
 

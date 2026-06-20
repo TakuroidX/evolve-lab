@@ -6,8 +6,18 @@
 from __future__ import annotations
 
 import ab_select as ab
+import btc_exit as bx
 import evolve_lab as el
 import prompt_opt as po
+
+
+def btc_exit(path_glob: str = None, n: int = 120, seed: int = 1, regime: str = "trend") -> dict:
+    """BTC bot 出口リプレイ ドメイン (select 専用)。path_glob 指定=bot の実 logs を read-only 評価、
+    未指定=決定論の合成 fixture。regime ∈ {trend, side, vol}。候補/現行は bx.CANDIDATES / bx.INCUMBENT。
+    select(dom, bx.CANDIDATES["tight_sl"], bx.INCUMBENT) で 1候補ずつ判定。緩和候補は bx.censored_rate で veto。"""
+    paths = bx.load_paths(path_glob) if path_glob else bx.make_synthetic_paths(n=n, seed=seed)
+    regime_key = {"trend": bx.trend_phase, "side": bx.by_side, "vol": bx.by_vol}[regime]
+    return bx.build_btc_exit_domain(paths, regime_key=regime_key)
 
 
 def ab_select(scenario: str = "genuine", n: int = 120, seed: int = 1) -> dict:

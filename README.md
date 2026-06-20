@@ -9,7 +9,7 @@ bot it was distilled from. For the longer narrative, see [`STORY.md`](STORY.md).
 
 ```bash
 python3 evolve_lab.py     # POC: contrast trustworthy vs naive selection across seeds
-python3 -m pytest -q      # regression guards (evolve_lab 6 + selection_engine 7 + prompt_opt 11 + ab_select 9 = 33 tests)
+python3 -m pytest -q      # regression guards (evolve_lab 6 + selection_engine 7 + prompt_opt 11 + ab_select 9 + btc_exit 15 = 48 tests)
 ```
 
 ---
@@ -150,6 +150,45 @@ bootstrap floor rejects it 19/20, so this is **not** claimed as "always 4/4." Th
 is narrow and exact: **the two traps that fool aggregate statistics are caught every time, by the gate
 that matches the trap** — the same engine and the same `select()` scorecard as the other two domains.
 
+## The engine, turned back on the bot that produced it
+
+`domains.btc_exit` is the loop closing: it makes the trading bot's **own exit logic** a domain of the
+general engine. The bot's pure exit-replay functions (`replay_exit`, `load_paths`) are **faithfully
+ported** (byte-identical bar docstrings) into evolve-lab, so it stays a standalone, dependency-free,
+publishable repo — no coupling back to the bot. The public repo ships only a deterministic **synthetic
+path fixture** (no trade history is published); locally the adapter reads the bot's real
+`position_path_*.jsonl` read-only via `--paths`.
+
+On **175 real SIM trades**, the general engine reproduces the bot's own exit-fitness verdicts — three
+candidate exit changes, judged one at a time:
+
+```
+candidate              engine  boot  oos   reg   censored
+早利確  tighter TS       PASS   pass  pass  pass   16.6%
+早損切り tighter SL       FAIL   fail  fail  fail   12.6%
+利伸ばし looser  TS       FAIL   fail  fail  fail   45.7%  → loosen + high-censored: vetoed
+```
+
+Three honest qualifications, stated up front:
+
+1. **Verdicts agree; gates are not identical.** The selection here uses the *generic* three gates
+   (bootstrap mean-CI / OOS / regime) plus a censoring surface — a re-expression of, not a copy of, the
+   bot's `fitness.py` gates (median/outlier/payoff/censoring). The claim is that the verdicts **match**
+   on the real run, not that the gate math is the same.
+2. **PASS ≠ ship.** The `tighter TS` PASS is exactly the one the bot's *own* adversarial critic later
+   rejected as premature (the gain was concentrated in a two-day trending window; the OOS split was
+   noisy). The engine and the bot agree *because they run the same discipline* — including the part that
+   refuses a PASS.
+3. **Censoring does real work, not just decoration.** Price paths are right-censored at the realized
+   close, so *loosening* an exit is structurally unobservable (you can't see past the close). On a
+   constructed trap (`make_censoring_trap_paths`) a looser exit **passes all three gates** yet is
+   **100 % censored** — so the censoring veto overrides the gate-PASS. This asymmetry (only tightening is
+   measurable) is the single most defensible idea in the repo, and it is *demonstrated*, not asserted.
+
+```bash
+python3 demo_btc_exit.py            # deterministic synthetic fixture (free) + the censoring-veto demo
+```
+
 ## Honest positioning (what this is, and is **not**)
 
 None of the individual techniques here are novel. They are well-established:
@@ -189,13 +228,15 @@ non-stationarity, censoring) where documented systems have been shown to game th
 |---|---|
 | `evolve_lab.py` | true signal, data, mutation, both selection rules, evolution loop, `run_suite` |
 | `selection_engine.py` | domain-agnostic gates + `select()` scorecard + `evolve()` loop |
-| `domains.py` | domain adapters (symbolic regression + prompt optimization + A/B selection; one function each) |
+| `domains.py` | domain adapters (symbolic regression + prompt optimization + A/B selection + bot exit; one function each) |
 | `prompt_opt.py` | prompt-optimization domain: labeled task, scorer, deterministic fake model, cost-capped cache |
 | `anthropic_backend.py` | the only networked file: real LLM model/rewrite via `urllib`, key from env, zero deps |
 | `demo_prompt_opt.py` | runnable real-API demo (graceful no-cost skip when no key) |
 | `ab_select.py` | A/B-selection domain: 4 planted scenarios + `naive_winner()` contrast (deterministic, no API) |
 | `demo_ab_select.py` | deterministic, free contrast demo (naive mean-compare vs trustworthy scorecard) |
-| `test_*.py` | 33 deterministic regression guards (offline) |
+| `btc_exit.py` | bot exit-replay domain: faithfully-ported `replay_exit`/`load_paths`, synthetic fixture, censoring veto |
+| `demo_btc_exit.py` | judges the bot's real exits read-only (`--paths`) or a synthetic fixture; censoring-veto demo |
+| `test_*.py` | 48 deterministic regression guards (offline) |
 | `DESIGN.md` | architecture + roadmap |
 | `STORY.md` | the narrative: the 1.5-year loop, the null result, and what survived |
 
