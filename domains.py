@@ -8,6 +8,7 @@ from __future__ import annotations
 import ab_select as ab
 import btc_exit as bx
 import evolve_lab as el
+import model_challenge as mc
 import prompt_opt as po
 
 
@@ -18,6 +19,19 @@ def btc_exit(path_glob: str = None, n: int = 120, seed: int = 1, regime: str = "
     paths = bx.load_paths(path_glob) if path_glob else bx.make_synthetic_paths(n=n, seed=seed)
     regime_key = {"trend": bx.trend_phase, "side": bx.by_side, "vol": bx.by_vol}[regime]
     return bx.build_btc_exit_domain(paths, regime_key=regime_key)
+
+
+def model_challenge(path_glob: str = None, samples: list = None) -> dict:
+    """モデル訓練 (model-challenge) ドメイン (select 専用・依存ゼロ・xgboost 不要)。
+    訓練済みモデルの pre-computed 予測を gate する: candidate (新版) vs incumbent (旧版)。
+    path_glob 指定=bot 側が生成した eval_predictions*.jsonl を read-only ロード、samples 直渡しも可。
+    select(dom, "candidate", "incumbent") で1回判定。delta=incumbent_logloss-candidate_logloss。
+    見出しは model_challenge.headline_auc(dom["data"])。ordered_key=ts / slice_key=regime。"""
+    if samples is None:
+        if not path_glob:
+            raise ValueError("model_challenge は path_glob か samples のどちらかが必須")
+        samples = mc.load_predictions(path_glob)
+    return mc.make_domain(samples)
 
 
 def ab_select(scenario: str = "genuine", n: int = 120, seed: int = 1) -> dict:

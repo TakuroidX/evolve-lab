@@ -72,6 +72,19 @@ def test_censoring_pass_when_improvement_holds_observed():
     assert se.gate_censoring(dom, "B", "A", min_observed=10).status == "pass"
 
 
+def test_gate_oos_embargo_backward_compatible():
+    # embargo=0 (default) は従来挙動と完全一致 (後方互換)。embargo>0 は有効データを縮めても
+    # 符号判定が壊れない (本物の改善なら依然 pass・境界 sample を捨てるだけ)。
+    dom = domains.symbolic_regression(seed=1)
+    good, bad = [1.0, -2.0, 0.5, 0.0, 0.0, 0.0], [0.0] * 6
+    base = se.gate_oos(dom, good, bad, min_n=20)
+    explicit0 = se.gate_oos(dom, good, bad, min_n=20, embargo=0)
+    assert base.status == explicit0.status == "pass"
+    assert base.numbers == explicit0.numbers          # default は数値まで不変
+    embargoed = se.gate_oos(dom, good, bad, min_n=5, embargo=3)
+    assert embargoed.status == "pass"                 # 縮んでも本物の改善は残る
+
+
 def test_engine_evolves_and_generalizes():
     # 同じエンジンが勾配ドメインで [0]*6 から登り、未使用 test で汎化する (= evolve-lab 結果の再現)
     dom = domains.symbolic_regression(seed=1)

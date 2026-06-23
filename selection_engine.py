@@ -62,12 +62,26 @@ def gate_bootstrap(domain, candidate, incumbent, reps: int = 2000, seed: int = 0
     return GateResult("bootstrap", "fail", "95%CI が 0 を跨ぐ (ノイズと区別不能)", nums)
 
 
-def gate_oos(domain, candidate, incumbent, n_folds: int = 3, min_n: int = 20):
-    """時系列 k-fold: 順序で n_folds ブロックに分け、どの期間でも改善が正のままか (期間過学習を弾く)。"""
+def gate_oos(domain, candidate, incumbent, n_folds: int = 3, min_n: int = 20, embargo: int = 0):
+    """時系列 k-fold: 順序で n_folds ブロックに分け、どの期間でも改善が正のままか (期間過学習を弾く)。
+
+    embargo (>0): 隣接ブロックの境界から embargo 個の sample を**両側で捨てて**ギャップを空ける
+    (隣接ブロック間の時系列リークを減らす・López de Prado の purge/embargo 思想の軽量版)。
+    モデル評価では隣接サンプルが相関しがちで、境界をくっつけると OOS が楽観化する。
+    default embargo=0 で従来挙動と完全一致 (後方互換)。"""
     key = domain.get("ordered_key") or (lambda s: 0)
     data = sorted(domain["data"], key=key)
     n = len(data)
-    blocks = [data[i * n // n_folds:(i + 1) * n // n_folds] for i in range(n_folds)]
+    raw = [data[i * n // n_folds:(i + 1) * n // n_folds] for i in range(n_folds)]
+    if embargo > 0 and n_folds > 1:
+        # 各ブロックの境界側 embargo 個を捨てる (先頭ブロックは前境界なし/末尾は後境界なしを尊重)
+        blocks = []
+        for j, b in enumerate(raw):
+            lo = embargo if j > 0 else 0            # 前のブロックとの境界
+            hi = len(b) - embargo if j < n_folds - 1 else len(b)  # 次のブロックとの境界
+            blocks.append(b[lo:hi] if hi > lo else [])
+    else:
+        blocks = raw
     qual = [b for b in blocks if len(b) >= min_n]
     if len(qual) < 2:
         return GateResult("oos", "insufficient",
