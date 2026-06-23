@@ -55,14 +55,23 @@ to climb?
 
 That question is what this repository isolates. `evolve_lab.py` puts the *same* loop on a domain where
 a gradient provably exists — symbolic regression, recovering a hidden low-degree function from noisy
-data with an over-capacity model. With trustworthy selection, the loop climbs and **generalizes**,
-bounded near the irreducible error, with zero catastrophic runs. With naive train-only selection — the
-exact "1.5-year loop" — it **blows up 8–15× on a fraction of seeds, unpredictably**. (Honest caveat:
-on some seeds naive does fine; the difference is the *tail*, not the average. Not overstating this is
-the point.)
+data with an over-capacity model. With naive **train-only** selection — the exact "1.5-year loop" — it
+**blows up 8–15× on a fraction of seeds, unpredictably**. Switch to selecting on **held-out** data and
+the catastrophic tail vanishes (0/6).
 
-The verdict: the method is sound. The bot's failure was the **domain** — there was no exploitable
-gradient in the inputs we could actually access.
+(Honest caveat, and a self-correction: an earlier version of this demo compared only naive(train)
+against the *gated* held-out rule, and credited the statistical gate with removing the tail. That was
+**confounded** — it changed two things at once. Equalizing it (a plain held-out rule, no gate) shows
+that in this simple toy the tail is removed by using held-out data **at all**, not by the gate; the
+toy's only failure mode is small-sample overfitting, which plain held-out already catches. The gate's
+marginal value over plain held-out lives in the harder domains below, where a held-out *mean* can still
+lie — peeking, regime-concentration, censoring. Catching this confound in the repo's own flagship demo,
+before publishing, is the same discipline as §4.5 below. And on some seeds even naive generalizes; the
+difference is the *tail*, not the average. Not overstating this is the point.)
+
+The verdict: the method is sound — selecting on held-out data, the loop climbs and generalizes where a
+gradient exists. The bot's failure was the **domain** — there was no exploitable gradient in the inputs
+we could actually access.
 
 ## 4. The day we proved it, honestly
 

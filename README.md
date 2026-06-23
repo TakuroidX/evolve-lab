@@ -9,7 +9,7 @@ bot it was distilled from. For the longer narrative, see [`STORY.md`](STORY.md).
 
 ```bash
 python3 evolve_lab.py     # POC: contrast trustworthy vs naive selection across seeds
-python3 -m pytest -q      # regression guards (evolve_lab 6 + selection_engine 11 + prompt_opt 11 + ab_select 9 + btc_exit 16 = 53 tests)
+python3 -m pytest -q      # regression guards (evolve_lab 7 + selection_engine 11 + prompt_opt 11 + ab_select 9 + btc_exit 16 = 54 tests)
 ```
 
 ---
@@ -24,11 +24,18 @@ on a near-flat / non-stationary / censored fitness landscape, *more mutation jus
 This repo isolates that lesson in two pieces:
 
 1. **`evolve_lab.py`** — a symbolic-regression POC where the hidden signal is real (a true gradient
-   exists). Run the *same* evolutionary loop with two selection rules and watch them diverge:
-   - **Trustworthy selection** (accept only if the improvement is statistically real on held-out data)
-     → generalizes, bounded near the irreducible error, **zero blow-ups**.
-   - **Naive selection** (accept if training error drops — the "loss → tweak → looks better → new problem"
-     loop) → **catastrophically overfits on some seeds (8–15× worse), unpredictably**.
+   exists). Run the *same* evolutionary loop with three selection rules and watch where the
+   catastrophic tail actually comes from:
+   - **Naive** (accept if *training* error drops — the "loss → tweak → looks better → new problem" loop)
+     → **catastrophically overfits on some seeds (8–15× worse), unpredictably**.
+   - **Plain held-out** (accept if *held-out* error drops — no statistical gate) → **the blow-ups vanish (0)**.
+   - **Gated** (held-out + a bootstrap-CI gate) → also 0 blow-ups, but **no better than plain held-out here**.
+
+   The honest reading: in this simple toy the catastrophic tail is removed by **using held-out
+   evaluation at all** — the 1.5-year loop's failure was *train-only* selection — **not** by the
+   statistical gate. The gate's marginal value over plain held-out appears only where a held-out *mean*
+   can still lie (peeking/multiple-testing, regime-concentration, censoring), demonstrated
+   **unconfounded** in the `ab_select` and `btc_exit` domains below.
 
 2. **`selection_engine.py`** — the discipline extracted into one **domain-agnostic object**:
    variation × selection (a pass/fail scorecard of generic gates) × inheritance. Plug in a fitness
@@ -54,26 +61,35 @@ the "1.5-year loop" of loss → add a filter → short-term improvement → a ne
 ```
 irreducible test MSE ≈ 1.0  (the noise variance; nothing can beat this)
 
-  seed   trustworthy   naive
-   1        1.35        8.98   ← naive blow-up
-   2        1.92        1.49
-   3        1.59       15.46   ← naive blow-up
-   4        3.95        2.84
-   5        2.75        1.93
-   6        2.56        6.59   ← naive blow-up
+  seed   naive(train)   plain(held-out)   gated(held-out)
+   1        8.98             3.44              1.35       ← naive blow-up
+   2        1.49             1.25              1.92
+   3       15.46             1.53              1.59       ← naive blow-up
+   4        2.84             1.54              3.95
+   5        1.93             1.23              2.75
+   6        6.59             1.34              2.56       ← naive blow-up
 
-trustworthy : median 2.24 / worst  3.95 / blow-ups 0   → bounded near irreducible, generalizes
-naive       : median 4.72 / worst 15.46 / blow-ups 3   → catastrophic overfit on some seeds
+naive (train only) : median 4.72 / worst 15.46 / blow-ups 3   → train-only = the 1.5-yr loop's trap
+plain (held-out)   : median 1.43 / worst  3.44 / blow-ups 0   → held-out alone removes the tail
+gated (held-out)   : median 2.24 / worst  3.95 / blow-ups 0   → no better than plain in this toy
 ```
 
-**The point is the tail, not the mean.** On average the two are not far apart; the difference is that
-naive selection **blows up 8–15× on a fraction of seeds, unpredictably**, while trustworthy selection
-caps the downside. This mirrors how the bot's loop failed: not every time, but occasionally and
-without warning.
+**The point is the tail — and *what* removes it.** Naive, train-only selection blows up 8–15× on a
+fraction of seeds, unpredictably; **using held-out evaluation at all caps the downside (0 blow-ups).**
+In this simple toy the bootstrap/OOS *gate* adds no margin over plain held-out (it is slightly more
+conservative). That is honest and expected — the toy's only failure mode is small-sample overfitting,
+which plain held-out already catches. The gate earns its keep on failure modes a held-out *mean*
+cannot see — peeking/multiple-testing, regime-concentration, censoring — shown **unconfounded** in
+`ab_select` and `btc_exit` below.
 
-> **Honest note:** this is *not* "trustworthy selection always wins" — on seeds 2 and 5 naive
-> generalizes fine. The claim is narrow and exact: **trustworthy selection removes the catastrophic
-> tail (0 blow-ups); naive selection carries it (3/6).** Not overstating the result is the entire point.
+> **Honest note (and a self-correction).** An earlier version of this POC compared only naive(train)
+> against gated(held-out) and credited the *gate* with removing the tail. That was **confounded** — it
+> changed two things at once (the data *and* the rule). Equalizing the data (the `plain` column above)
+> shows the tail is removed by the held-out data, not the gate. This is exactly the self-deception the
+> repo is about, caught in the repo's own flagship demo before publication. The narrow claims that
+> survive: **(1)** train-only selection carries a catastrophic tail (3/6) that held-out selection
+> removes (0/6); **(2)** the gate's value *over plain held-out* is real but lives in `ab_select` /
+> `btc_exit`, not here. On seeds 2 and 5 even naive generalizes — not overstating the result is the point.
 
 ## The selection engine
 
@@ -232,7 +248,7 @@ non-stationarity, censoring) where documented systems have been shown to game th
 
 | file | what |
 |---|---|
-| `evolve_lab.py` | true signal, data, mutation, both selection rules, evolution loop, `run_suite` |
+| `evolve_lab.py` | true signal, data, mutation, three selection rules (naive/plain/gated), evolution loop, `run_suite` |
 | `selection_engine.py` | domain-agnostic gates + `select()` scorecard + `evolve()` loop |
 | `domains.py` | domain adapters (symbolic regression + prompt optimization + A/B selection + bot exit; one function each) |
 | `prompt_opt.py` | prompt-optimization domain: labeled task, scorer, deterministic fake model, cost-capped cache |
@@ -242,7 +258,7 @@ non-stationarity, censoring) where documented systems have been shown to game th
 | `demo_ab_select.py` | deterministic, free contrast demo (naive mean-compare vs trustworthy scorecard) |
 | `btc_exit.py` | bot exit-replay domain: faithfully-ported `replay_exit`/`load_paths`, synthetic fixture, censoring veto |
 | `demo_btc_exit.py` | judges the bot's real exits read-only (`--paths`) or a synthetic fixture; censoring-veto demo |
-| `test_*.py` | 53 deterministic regression guards (offline) |
+| `test_*.py` | 54 deterministic regression guards (offline) |
 | `DESIGN.md` | architecture + roadmap |
 | `STORY.md` | the narrative: the 1.5-year loop, the null result, and what survived |
 
