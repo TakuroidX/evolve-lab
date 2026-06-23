@@ -176,8 +176,9 @@ publishable repo — no coupling back to the bot. The public repo ships only a d
 path fixture** (no trade history is published); locally the adapter reads the bot's real
 `position_path_*.jsonl` read-only via `--paths`.
 
-On **175 real SIM trades**, the general engine reproduces the bot's own exit-fitness verdicts — three
-candidate exit changes, judged one at a time:
+On **175 real SIM trades** (as of 2026-06-19; the bot keeps trading so the live count grows — the
+verdicts below are stable across the larger set), the general engine reproduces the bot's own
+exit-fitness verdicts — three candidate exit changes, judged one at a time:
 
 ```
 candidate              engine  boot  oos   reg   censored
