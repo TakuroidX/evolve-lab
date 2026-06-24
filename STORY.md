@@ -147,6 +147,34 @@ turned out to rest on a bug, it withdrew that conclusion rather than keep the ti
 discipline pointed both at false hope and at its own comfortable verdict. That two-way refusal is the
 result.
 
+## 5.5 A fourth domain — and a third self-correction
+
+The week after writing the above, I pointed the engine at a harder question than exit replay: **does a
+*rebuilt* model actually beat the incumbent?** `model_challenge` is the fourth domain — and, like the
+others, it gates rather than trains. Staying dependency-free, it reads pre-computed predictions (a fresh
+candidate model vs the frozen incumbent on a held-out window) and runs the same scorecard: bootstrap CI,
+time-series OOS (now with an embargo between blocks), regime consistency, plus a pure-Python rank-AUC.
+
+The result was the engine's whole point in miniature. A model retrained on recent data **passed every
+gate** — its per-sample improvement over the incumbent was statistically real, consistent across time
+blocks and regimes, not noise. And it **still failed**: the headline AUC edge (+0.016) fell short of the
+pre-registered bar (+0.02). So it was logged as a *calibrated weak-no* — a real-but-insufficient signal —
+without lowering the bar to meet it. (Lowering the bar to fit the result is the exact self-deception the
+repo exists to refuse.)
+
+Then the process caught itself a third time. Chasing why a model that scored well offline scored near
+coin-flip live, I wrote down a tidy two-layer explanation ("the serving pipeline silently degrades the
+features"). Verifying it killed it: the serving pipeline turned out **bit-identical** to the training
+pipeline, and the two numbers I had compared were two *different evaluation windows*, not two pipelines.
+I retracted the layered diagnosis. The real offline→live gap is mostly still unexplained, and a
+read-only instrument is now capturing the live feature vectors to find it — no guess shipped, no fix
+claimed on a hunch.
+
+Three self-corrections, then: a résumé that wouldn't inflate (§5), a no-edge verdict withdrawn when it
+rested on a bug (§4.5), and now an over-confident gap diagnosis retracted on verification. The engine
+isn't interesting because it wins. It's interesting because every time it — or I — started to believe
+something convenient, the same discipline made us check, and we said the true thing instead.
+
 ## 6. Why it matters
 
 The field is pouring resources into agents that improve themselves, and is increasingly worried about

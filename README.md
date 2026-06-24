@@ -9,7 +9,7 @@ bot it was distilled from. For the longer narrative, see [`STORY.md`](STORY.md).
 
 ```bash
 python3 evolve_lab.py     # POC: contrast trustworthy vs naive selection across seeds
-python3 -m pytest -q      # regression guards (evolve_lab 7 + selection_engine 11 + prompt_opt 11 + ab_select 9 + btc_exit 16 = 54 tests)
+python3 -m pytest -q      # regression guards (evolve_lab 7 + selection_engine 12 + prompt_opt 11 + ab_select 9 + btc_exit 16 + model_challenge 9 = 64 tests)
 ```
 
 ---
@@ -212,6 +212,28 @@ Three honest qualifications, stated up front:
 python3 demo_btc_exit.py            # deterministic synthetic fixture (free) + the censoring-veto demo
 ```
 
+## A fourth domain: judging a model rebuild
+
+`domains.model_challenge` is the engine's most self-referential application: judging whether a
+**rebuilt prediction model** actually beats the incumbent it would replace. Like the other domains it
+*gates rather than trains* — staying dependency-free, it reads **pre-computed predictions** (a fresh
+candidate model vs the frozen incumbent on a held-out window) and scores the per-sample improvement
+with the same scorecard: `gate_bootstrap` (95% CI of the log-loss delta), `gate_oos` (now with an
+**embargo** between time blocks to blunt boundary leakage), `gate_regime`, plus a pure-Python
+`headline_auc` (rank AUC) as a supplementary discrimination check.
+
+Applied to a real rebuild (a model retrained on recent data vs a frozen one), the verdict was the
+engine in miniature: the candidate **passed every gate** — its improvement was statistically real and
+consistent across time blocks and regimes — and **still fell short**, because the headline AUC edge
+(+0.016) did not clear the pre-registered bar (+0.02). It was logged as a **calibrated weak-no**: a
+real-but-insufficient signal, recorded without moving the bar to meet it. Training and live evaluation
+live in the private upstream repo; what's published here is the **judge** — the dependency-free domain
+that decides, and refuses, on the same scorecard as the other four.
+
+```bash
+python3 -m pytest test_model_challenge.py -q   # synthetic-fixture gates (genuine→PASS, 1-regime/1-block/noise→FAIL)
+```
+
 ## Honest positioning (what this is, and is **not**)
 
 None of the individual techniques here are novel. They are well-established:
@@ -251,7 +273,7 @@ non-stationarity, censoring) where documented systems have been shown to game th
 |---|---|
 | `evolve_lab.py` | true signal, data, mutation, three selection rules (naive/plain/gated), evolution loop, `run_suite` |
 | `selection_engine.py` | domain-agnostic gates + `select()` scorecard + `evolve()` loop |
-| `domains.py` | domain adapters (symbolic regression + prompt optimization + A/B selection + bot exit; one function each) |
+| `domains.py` | domain adapters (symbolic regression + prompt optimization + A/B selection + bot exit + model rebuild; one function each) |
 | `prompt_opt.py` | prompt-optimization domain: labeled task, scorer, deterministic fake model, cost-capped cache |
 | `anthropic_backend.py` | the only networked file: real LLM model/rewrite via `urllib`, key from env, zero deps |
 | `demo_prompt_opt.py` | runnable real-API demo (graceful no-cost skip when no key) |
@@ -259,7 +281,8 @@ non-stationarity, censoring) where documented systems have been shown to game th
 | `demo_ab_select.py` | deterministic, free contrast demo (naive mean-compare vs trustworthy scorecard) |
 | `btc_exit.py` | bot exit-replay domain: faithfully-ported `replay_exit`/`load_paths`, synthetic fixture, censoring veto |
 | `demo_btc_exit.py` | judges the bot's real exits read-only (`--paths`) or a synthetic fixture; censoring-veto demo |
-| `test_*.py` | 54 deterministic regression guards (offline) |
+| `model_challenge.py` | model-rebuild domain: gates pre-computed candidate-vs-incumbent predictions (log-loss delta + rank-AUC), dependency-free |
+| `test_*.py` | 64 deterministic regression guards (offline) |
 | `DESIGN.md` | architecture + roadmap |
 | `STORY.md` | the narrative: the 1.5-year loop, the null result, and what survived |
 
