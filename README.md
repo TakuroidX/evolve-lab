@@ -7,6 +7,14 @@ self-improving loop fooling itself can be made domain-agnostic and reused.**
 Pure Python, zero dependencies, fully deterministic (fixed seeds). Independent of the trading
 bot it was distilled from. For the longer narrative, see [`STORY.md`](STORY.md). 日本語は [`README.ja.md`](README.ja.md)。
 
+> **What this is — and isn't.** A worked **case study** and an **honest null result**, not a novel
+> method, not a SOTA tool, and *not* a profitable bot. Every individual technique here has a more
+> rigorous, established form elsewhere (Deflated Sharpe Ratio / PBO / CPCV — see *Honest positioning*).
+> The contribution is the *integration* (a pass/fail scorecard wired inside a self-improving loop) and
+> the *honesty* (negatives reported straight). If you want the single clearest, no-private-data
+> demonstration, start with **`python3 demo_ab_select.py`** — it shows the gates catching three ways an
+> A/B "win" can lie, on synthetic data, in seconds.
+
 ```bash
 python3 evolve_lab.py     # POC: contrast trustworthy vs naive selection across seeds
 python3 -m pytest -q      # regression guards (evolve_lab 7 + selection_engine 12 + prompt_opt 11 + ab_select 9 + btc_exit 16 + model_challenge 9 = 64 tests)
@@ -262,10 +270,13 @@ asymmetry* (an exit replay is right-censored at the realized close, so only tigh
 as an explicit selection veto — and even that is offered tentatively, pending a direct read of
 concurrent work.
 
-The value here is not novelty. It is a worked, reproducible example of a self-improvement loop that
+The value here is not novelty. It is a worked example of a self-improvement loop that
 **refuses to fool itself in both directions** — rejecting false positives *and* withdrawing its own
 comfortable negative once it turns out to rest on a bug — under exactly the conditions (noise,
 non-stationarity, censoring) where documented systems have been shown to game their own evaluation.
+(Reproducibility scope: the published code and its synthetic fixtures are fully deterministic and
+reproducible; the bot's real trade history and the model training/live evaluation are private, so those
+specific numbers are *reported, not independently reproducible* here.)
 
 ## Files
 

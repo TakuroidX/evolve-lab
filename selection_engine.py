@@ -17,6 +17,14 @@ Domain は dict で与える (重い抽象化を避ける):
   slice_key(sample) -> hashable    (任意)      # regime 横断スライスのキー ("UNKNOWN" は除外)
 
 純Python・依存ゼロ・決定論 (seed 固定)。LLM 不使用。
+
+⚠️ 厳密性の正直な但し書き: 下の gate_* は Deflated Sharpe Ratio / PBO / Combinatorial
+   Purged CV (Bailey & López de Prado) の **依存ゼロ軽量再実装** であり、統計的には劣る
+   (多重検定補正なし / OOS の "purge" は隣接ブロック端切り=embargo のみで combinatorial
+   path 無し / regime は符号一致という粗い二値判定)。**本気の検定が要るなら mlfinpy /
+   López de Prado の実装を使うこと。** 本エンジンの価値は手法の novelty でなく、これらの
+   ゲートを「進化ループの中に pass/fail scorecard として配線し、ランキングせず PASS/HOLD/FAIL
+   を返す」統合と、その結果としての「正直な negative」にある。
 """
 from __future__ import annotations
 

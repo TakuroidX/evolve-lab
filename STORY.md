@@ -30,7 +30,9 @@ non-stationary, partially-censored fitness landscape — which is what a retail 
 *more search makes it worse*, not better.
 
 So the bottleneck was never the model's horsepower. The model (a gradient-boosted predictor) already
-had honest, modest skill (ROC-AUC ≈ 0.71). The bottleneck was **selection**: the loop could not tell
+had honest, modest skill (ROC-AUC ≈ 0.71 **offline** — and, as §4.5/§5.5 recount, that offline skill
+did *not* show up live, which is precisely the point: the gap was selection/serving, not the model).
+The bottleneck was **selection**: the loop could not tell
 a real improvement from a lucky one. And worse, a self-improving loop has every incentive to deceive
 itself — to find the framing in which it looks successful. Sakana's [Darwin Gödel
 Machine](https://arxiv.org/abs/2505.22954) documents this directly: asked to fix its own tendency to
@@ -112,10 +114,14 @@ garbage**, on every prediction, for as long as that model had been live.
 This matters because the earlier "the model has no edge" conclusion had been measured on a *crippled*
 model. The same rigor that refused to let a false positive ship now refused to let a *false negative*
 stand: it would not accept a "no edge" verdict built on a bug. The fix was a one-line correctness
-change; the honest consequence is larger — **the model's edge verdict is withdrawn and is being
-re-measured on clean, post-fix data.** This does *not* mean an edge exists. Restoring the input only
-returns the model to what it was trained for; whether that beats real costs is the open question. It
-means the conclusion was not yet *earned*, so it is being earned again.
+change; the honest consequence is larger — **the model's edge verdict was withdrawn and re-measured on
+clean, post-fix data.** That re-measurement has since concluded (§5.5): on the window where the live
+model was actually instrumented, the clean model's offline skill **did not appear live** — and the
+"big offline→live gap" turned out to be a window-mismatch artifact, not a recoverable serving defect.
+So the verdict was *re-earned*, and it reinforces rather than undermines the thesis: the bottleneck was
+never the model's horsepower (offline it has skill) but whether that skill survives to live — a
+**selection / domain** problem, not a model one. The honest discipline reopened the question on a bug
+and then closed it again on the data.
 
 I keep this in the story rather than quietly retaining the tidier "no edge" ending, because that choice
 *is* the thesis. A loop that refuses to deceive itself has to refuse to deceive itself about its own
@@ -166,12 +172,24 @@ Then the process caught itself a third time. Chasing why a model that scored wel
 coin-flip live, I wrote down a tidy two-layer explanation ("the serving pipeline silently degrades the
 features"). Verifying it killed it: the serving pipeline turned out **bit-identical** to the training
 pipeline, and the two numbers I had compared were two *different evaluation windows*, not two pipelines.
-I retracted the layered diagnosis. The real offline→live gap is mostly still unexplained, and a
-read-only instrument is now capturing the live feature vectors to find it — no guess shipped, no fix
-claimed on a hunch.
+I retracted the layered diagnosis. A read-only instrument then captured the live feature vectors and
+the question was settled on data, not hunch: on the matched window the real serving pipeline scored
+**≈ the same as live** (both near coin-flip), while the offline "skill" lived only in a different,
+earlier window — i.e. **the gap was a window mismatch, and the offline skill is window-dependent and
+does not generalize to live.** No recoverable serving defect to "fix."
 
-Three self-corrections, then: a résumé that wouldn't inflate (§5), a no-edge verdict withdrawn when it
-rested on a bug (§4.5), and now an over-confident gap diagnosis retracted on verification. The engine
+A fourth pass closed the loop honestly. One real, evidence-driven model hypothesis remained: the audit
+had shown the model's absolute-price features had drifted out-of-distribution as BTC's price level
+moved far from the training range, so I rebuilt the model on price-level-invariant (returns/relative)
+features only — a clean, controlled change. The rebuilt model **passed the bootstrap and regime gates**
+but **failed the out-of-sample gate** (its edge was period-concentrated), and the part of its gain that
+wasn't just retraining-recency was below the pre-registered bar. Another calibrated *no*, logged without
+moving the bar — and again it was a gate (OOS) catching a plausible improvement that the noise-floor and
+regime checks alone would have waved through.
+
+Four self-corrections, then: a résumé that wouldn't inflate (§5), a no-edge verdict withdrawn when it
+rested on a bug and then re-earned on clean data (§4.5), an over-confident gap diagnosis retracted on
+verification, and an evidence-driven model rebuild rejected by its own out-of-sample gate. The engine
 isn't interesting because it wins. It's interesting because every time it — or I — started to believe
 something convenient, the same discipline made us check, and we said the true thing instead.
 
@@ -190,5 +208,8 @@ delivered on time, with the receipts."
 ---
 
 *Code, tests, and the full positioning (including what is and isn't prior art) are in this repository.
-Everything is deterministic and reproducible. If you find a place where I've overstated, that's a bug —
-open an issue.*
+The published code and its synthetic fixtures are fully deterministic and reproducible; the trading
+bot's real trade history and the model's training/live evaluation live in a private upstream repo, so
+those specific numbers (e.g. the N=175 exit run, the model-rebuild AUCs) are **reported, not
+independently reproducible** here. If you find a place where I've overstated, that's a bug — open an
+issue.*
