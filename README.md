@@ -14,10 +14,21 @@ bot it was distilled from. For the longer narrative, see [`STORY.md`](STORY.md).
 > the *honesty* (negatives reported straight). If you want the single clearest, no-private-data
 > demonstration, start with **`python3 demo_ab_select.py`** — it shows the gates catching three ways an
 > A/B "win" can lie, on synthetic data, in seconds.
+>
+> **The sharpest story in here:** the day this discipline caught *my own* headline metric being a
+> **look-ahead leak**. Run **`python3 demo_lookahead_leak.py`** — on pure random-walk data (zero real
+> signal), a feature scores forward-AUC ~0.67 *purely by accidentally reading the future*, which is
+> exactly how a real model of mine showed 0.71 offline while being ~0.50 live. The honest reading is
+> the whole point: a self-improving loop that refuses to fool itself has to be willing to expose its
+> own best number as fake (see [`STORY.md`](STORY.md) §4.5 / §5.5). This is the contrast that anchors
+> the repo: the engine **climbs** where a real gradient exists (symbolic regression) and reports an
+> **honest null** where it doesn't (the trading bot) — and it caught the leak that had been faking the
+> difference.
 
 ```bash
 python3 evolve_lab.py     # POC: contrast trustworthy vs naive selection across seeds
-python3 -m pytest -q      # regression guards (evolve_lab 7 + selection_engine 12 + prompt_opt 11 + ab_select 9 + btc_exit 16 + model_challenge 9 = 64 tests)
+python3 demo_lookahead_leak.py   # the look-ahead-leak reproduction (0.71-vs-0.50 on pure noise)
+python3 -m pytest -q      # regression guards (evolve_lab 7 + selection_engine 12 + prompt_opt 11 + ab_select 9 + btc_exit 16 + model_challenge 9 + lookahead_leak 3 = 67 tests)
 ```
 
 ---
@@ -293,7 +304,8 @@ specific numbers are *reported, not independently reproducible* here.)
 | `btc_exit.py` | bot exit-replay domain: faithfully-ported `replay_exit`/`load_paths`, synthetic fixture, censoring veto |
 | `demo_btc_exit.py` | judges the bot's real exits read-only (`--paths`) or a synthetic fixture; censoring-veto demo |
 | `model_challenge.py` | model-rebuild domain: gates pre-computed candidate-vs-incumbent predictions (log-loss delta + rank-AUC), dependency-free |
-| `test_*.py` | 64 deterministic regression guards (offline) |
+| `demo_lookahead_leak.py` | standalone reproduction of the look-ahead leak (forming-bar merge_asof × open-timestamp): 0.67 AUC on pure noise vs 0.50 causal |
+| `test_*.py` | 67 deterministic regression guards (offline) |
 | `DESIGN.md` | architecture + roadmap |
 | `STORY.md` | the narrative: the 1.5-year loop, the null result, and what survived |
 
