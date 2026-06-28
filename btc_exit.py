@@ -2,7 +2,7 @@
 
 狙い (DESIGN.md step5): 淘汰エンジンが**生まれ故郷の bot 自身の出口**を裁けることを示す
 = 「bot はこのエンジンの一例」。bot の純関数 replay_exit/load_paths を **最小移植** し
-(出典: Bitflyer-Trading-Bot-Pro_V2 tools/exit_replay/engine.py, 2026-06-14)、evolve-lab を
+(出典: 著者の private な BTC trading-bot リポジトリ tools/exit_replay/engine.py, 2026-06-14)、evolve-lab を
 独立・依存ゼロのまま保つ (bot リポジトリに結合しない)。
 
 データの扱い (公開札の方針, interview 2026-06-21):
