@@ -276,10 +276,16 @@ multi-gate pass/fail scorecard wired *inside* a running loop, with an adversaria
 "no edge" verdicts had been measured on a model fed corrupted input (a `== "v3"` version-gate bug
 froze ~17% of its features), so that verdict was **withdrawn and is being re-measured on clean data**
 (see `STORY.md` §4.5) — which does *not* imply an edge exists, only that the conclusion was not yet
-earned. If there is any sliver of method not obviously covered above, it is treating *censoring
+earned. If there is any sliver of method not obviously covered above, it would be treating *censoring
 asymmetry* (an exit replay is right-censored at the realized close, so only tightening is observable)
-as an explicit selection veto — and even that is offered tentatively, pending a direct read of
-concurrent work.
+as an explicit selection veto. On a direct read of concurrent work, even that is anticipated: it is a
+coarse, thresholded instance of **pessimism under partial coverage** in offline RL (refuse a candidate
+whose value leans on under-covered / out-of-support regions —
+[arXiv:2107.06226](https://arxiv.org/abs/2107.06226)) and of the **selective-labels problem**
+(evaluating decisions whose outcomes are observed for only one action —
+[Lakkaraju et al., KDD 2017](https://cs.stanford.edu/~jure/pubs/contraction-kdd17.pdf)). So I claim no
+novelty here either — which is rather the point: even the repo's own last tentative sliver, read more
+closely, was someone else's idea first.
 
 The value here is not novelty. It is a worked example of a self-improvement loop that
 **refuses to fool itself in both directions** — rejecting false positives *and* withdrawing its own
